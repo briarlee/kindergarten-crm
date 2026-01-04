@@ -1,15 +1,32 @@
-import { useState, useMemo } from 'react';
-import { Building2, RefreshCw } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Building2, RefreshCw, Loader2 } from 'lucide-react';
 import { MetricCards, StateChart, FunnelChart, CustomerList } from './components';
-import { generateKindergartens, getStateDistribution, getFunnelData } from './data/generateData';
-import type { State } from './types/kindergarten';
+import { getStateDistribution, getFunnelData } from './data/generateData';
+import { fetchKindergartens } from './data/fetchGoogleSheet';
+import type { State, Kindergarten } from './types/kindergarten';
 
 function App() {
   const [selectedState, setSelectedState] = useState<State | null>(null);
-  const [dataKey, setDataKey] = useState(0);
+  const [data, setData] = useState<Kindergarten[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Generate data with stable key
-  const data = useMemo(() => generateKindergartens(17000, 12345 + dataKey), [dataKey]);
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const kindergartens = await fetchKindergartens();
+      setData(kindergartens);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载数据失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   // Filter data by selected state for metrics
   const filteredData = useMemo(() => {
@@ -21,9 +38,36 @@ function App() {
   const funnelData = useMemo(() => getFunnelData(filteredData), [filteredData]);
 
   const handleRefresh = () => {
-    setDataKey(prev => prev + 1);
     setSelectedState(null);
+    loadData();
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-slate-600">正在加载数据...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+        <div className="text-center bg-white p-8 rounded-lg shadow-lg">
+          <p className="text-red-600 mb-4">加载失败: {error}</p>
+          <button
+            onClick={handleRefresh}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            重试
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -83,7 +127,7 @@ function App() {
       {/* Footer */}
       <footer className="bg-slate-800 text-slate-400 py-4 mt-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm">
-          <p>幼儿园客户资产库 Demo - 数据为模拟生成 | 目标市场: 澳大利亚、加拿大、新西兰、新加坡</p>
+          <p>幼儿园客户资产库 - 数据来源: Google Sheets | 目标市场: 澳大利亚、加拿大、新西兰、新加坡</p>
         </div>
       </footer>
     </div>
